@@ -13,22 +13,23 @@ var doubleTimeSeries = template.Must(template.New("").Parse(`<!DOCTYPE html>
       google.charts.setOnLoadCallback(drawChart);
 
       function drawChart() {
-	var data1 = [
+	var data1 = new google.visualization.DataTable();
+	data1.addColumn('date', 'X');
+	data1.addColumn('number', '{{ .Y1 }}');
+	data1.addRows([
         {{ range .Data1 }}
             [new Date({{.Time}}), {{.Count}}],
         {{ end }}
-	];
-	var data2 = [
+	]);
+	var data2 = new google.visualization.DataTable();
+	data2.addColumn('date', 'X');
+	data2.addColumn('number', '{{ .Y2 }}');
+	data2.addRows([
         {{ range .Data2 }}
             [new Date({{.Time}}), {{.Count}}],
         {{ end }}
-	];
-	data1.forEach((v, i) => {
-	    v.push(data2[i] ? data2[i][1] : 0);
-	});
-        var dataTable = google.visualization.arrayToDataTable([
-          ['Time', '{{ .Y1 }}', '{{ .Y2 }}'],
-        ].concat(data1));
+	]);
+	var dataTable = google.visualization.data.join(data1, data2, 'full', [[0, 0]], [1], [1]);
 
         var options = {
           title: '{{ .Title }}',
@@ -39,6 +40,7 @@ var doubleTimeSeries = template.Must(template.New("").Parse(`<!DOCTYPE html>
             keepInBounds: true,
             maxZoomIn: 4.0
           },
+	  interpolateNulls: true
         };
 
         var chart = new google.visualization.AreaChart(document.getElementById('chart_div'));
