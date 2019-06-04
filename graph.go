@@ -20,7 +20,6 @@ type sample struct {
 }
 
 func resample(times []int, d time.Duration, cumulative bool) []sample {
-	sort.Ints(times)
 	if len(times) == 0 {
 		return nil
 	}
@@ -65,10 +64,7 @@ func timestamps(filename string) ([]int, error) {
 func main() {
 	filenames := os.Args[1:]
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		d, err := time.ParseDuration(r.FormValue("sample"))
-		if err != nil {
-			d = 24 * time.Hour
-		}
+		d, _ := time.ParseDuration(r.FormValue("sample"))
 		switch len(filenames) {
 		case 1:
 			first := filenames[0]
@@ -77,6 +73,7 @@ func main() {
 				http.Error(w, err.Error(), 500)
 				return
 			}
+			sort.Ints(times)
 			cumulative := r.FormValue("cumulative") != ""
 			samples := resample(times, d, cumulative)
 			var graph struct {
@@ -96,12 +93,24 @@ func main() {
 				http.Error(w, err.Error(), 500)
 				return
 			}
+			sort.Ints(times1)
 			times2, err := timestamps(second)
 			if err != nil {
 				http.Error(w, err.Error(), 500)
 				return
 			}
+			sort.Ints(times2)
 			cumulative := r.FormValue("cumulative") != ""
+			if d == 0 {
+				distance := time.Duration(times1[len(times1)-1]-times1[0]) * time.Millisecond
+				if distance < time.Hour {
+					d = time.Second
+				} else if distance < 168*time.Hour {
+					d = 5 * time.Minute
+				} else {
+					d = 24 * time.Hour
+				}
+			}
 			samples1 := resample(times1, d, cumulative)
 			samples2 := resample(times2, d, cumulative)
 			var graph struct {
@@ -120,6 +129,6 @@ func main() {
 		}
 	}))
 	defer server.Close()
-	exec.Command("open", server.URL+"?sample=24h").Run()
+	exec.Command("open", server.URL).Run()
 	select {}
 }
