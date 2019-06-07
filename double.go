@@ -34,9 +34,11 @@ var doubleTimeSeries = template.Must(template.New("").Parse(`<!DOCTYPE html>
         var options = {
           title: '{{ .Title }}',
           hAxis: { title: 'Time', titleTextStyle: {color: '#333'} },
+	  {{ if .TwoAxes }}
 	  series: {
 	    1: { targetAxisIndex: 1 }
 	  },
+	  {{ end }}
           explorer: {
             actions: ['dragToZoom', 'rightClickToReset'],
             axis: 'horizontal',

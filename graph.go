@@ -61,6 +61,15 @@ func timestamps(filename string) ([]int, error) {
 	return times, scanner.Err()
 }
 
+func percentile95(values []sample) int {
+	v := make([]sample, len(values))
+	copy(v, values)
+	sort.Slice(v, func(i, j int) bool {
+		return v[i].Count > v[j].Count
+	})
+	return v[len(v)/20].Count
+}
+
 func main() {
 	filenames := os.Args[1:]
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -111,14 +120,20 @@ func main() {
 					d = 24 * time.Hour
 				}
 			}
+
 			samples1 := resample(times1, d, cumulative)
 			samples2 := resample(times2, d, cumulative)
 			var graph struct {
-				Title string
-				Y1    string
-				Y2    string
-				Data1 []sample
-				Data2 []sample
+				Title   string
+				Y1      string
+				Y2      string
+				Data1   []sample
+				Data2   []sample
+				TwoAxes bool
+			}
+			const thresholdFor2Axes = 5
+			if percentile95(samples1)/percentile95(samples2) > thresholdFor2Axes || percentile95(samples2)/percentile95(samples1) > thresholdFor2Axes {
+				graph.TwoAxes = true
 			}
 			graph.Title = r.FormValue("title")
 			graph.Y1 = strings.TrimSuffix(first, filepath.Ext(first))
