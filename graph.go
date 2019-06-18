@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -15,11 +16,11 @@ import (
 )
 
 type sample struct {
-	Time  int
-	Count int
+	Time  int64
+	Count int64
 }
 
-func resample(times []int, d time.Duration, cumulative bool) []sample {
+func resample(times []int64, d time.Duration, cumulative bool) []sample {
 	if len(times) == 0 {
 		return nil
 	}
@@ -28,7 +29,7 @@ func resample(times []int, d time.Duration, cumulative bool) []sample {
 		Time: times[0],
 	}
 	for _, t := range times {
-		if next := current.Time + int(d/time.Millisecond); t < next {
+		if next := current.Time + int64(d/time.Millisecond); t < next {
 			current.Count++
 			continue
 		}
@@ -41,7 +42,7 @@ func resample(times []int, d time.Duration, cumulative bool) []sample {
 	return samples
 }
 
-func timestamps(filename string) ([]int, error) {
+func timestamps(filename string, rfc bool) ([]int64, error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return nil, err
@@ -49,10 +50,18 @@ func timestamps(filename string) ([]int, error) {
 	defer f.Close()
 	scanner := bufio.NewScanner(f)
 	i := 0
-	var times []int
+	var times []int64
 	for scanner.Scan() {
 		i++
-		next, err := strconv.Atoi(scanner.Text())
+		if rfc {
+			next, err := time.Parse(time.RFC3339, scanner.Text())
+			if err != nil {
+				return nil, fmt.Errorf("error on line %d: %s", i, err)
+			}
+			times = append(times, next.UnixNano()/int64(time.Millisecond))
+			continue
+		}
+		next, err := strconv.ParseInt(scanner.Text(), 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("error on line %d: %s", i, err)
 		}
@@ -61,7 +70,7 @@ func timestamps(filename string) ([]int, error) {
 	return times, scanner.Err()
 }
 
-func percentile95(values []sample) int {
+func percentile95(values []sample) int64 {
 	v := make([]sample, len(values))
 	copy(v, values)
 	sort.Slice(v, func(i, j int) bool {
@@ -70,19 +79,28 @@ func percentile95(values []sample) int {
 	return v[len(v)/20].Count
 }
 
+func sortInt64s(ts []int64) {
+	sort.Slice(ts, func(i, j int) bool {
+		return ts[i] < ts[j]
+	})
+}
+
 func main() {
-	filenames := os.Args[1:]
+	var rfc bool
+	flag.BoolVar(&rfc, "rfc", false, "Parse dates as RFC3339 first")
+	flag.Parse()
+	filenames := flag.Args()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		d, _ := time.ParseDuration(r.FormValue("sample"))
 		switch len(filenames) {
 		case 1:
 			first := filenames[0]
-			times, err := timestamps(first)
+			times, err := timestamps(first, rfc)
 			if err != nil {
 				http.Error(w, err.Error(), 500)
 				return
 			}
-			sort.Ints(times)
+			sortInt64s(times)
 			cumulative := r.FormValue("cumulative") != ""
 			if d == 0 {
 				distance := time.Duration(times[len(times)-1]-times[0]) * time.Millisecond
@@ -107,18 +125,18 @@ func main() {
 		case 2:
 			first := filenames[0]
 			second := filenames[1]
-			times1, err := timestamps(first)
+			times1, err := timestamps(first, rfc)
 			if err != nil {
 				http.Error(w, err.Error(), 500)
 				return
 			}
-			sort.Ints(times1)
-			times2, err := timestamps(second)
+			sortInt64s(times1)
+			times2, err := timestamps(second, rfc)
 			if err != nil {
 				http.Error(w, err.Error(), 500)
 				return
 			}
-			sort.Ints(times2)
+			sortInt64s(times2)
 			cumulative := r.FormValue("cumulative") != ""
 			if d == 0 {
 				distance := time.Duration(times1[len(times1)-1]-times1[0]) * time.Millisecond
