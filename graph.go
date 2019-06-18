@@ -84,6 +84,16 @@ func main() {
 			}
 			sort.Ints(times)
 			cumulative := r.FormValue("cumulative") != ""
+			if d == 0 {
+				distance := time.Duration(times[len(times)-1]-times[0]) * time.Millisecond
+				if distance < time.Hour {
+					d = time.Second
+				} else if distance < 168*time.Hour {
+					d = 5 * time.Minute
+				} else {
+					d = 24 * time.Hour
+				}
+			}
 			samples := resample(times, d, cumulative)
 			var graph struct {
 				Title string

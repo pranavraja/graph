@@ -59,10 +59,10 @@ var doubleTimeSeries = template.Must(template.New("").Parse(`<!DOCTYPE html>
     <form>
         <label for="sample">Resample</label>
         <input type="text" placeholder="5m" name="sample" id="sample">
-	<button onClick="sample.value='5m'" type="submit">5m</button>
-	<button onClick="sample.value='1h'" type="submit">1h</button>
-	<button onClick="sample.value='24h'" type="submit">1d</button>
-	<button onClick="sample.value='168h'" type="submit">1w</button>
+	<button onClick="sample.value='5m'; this.parentNode.submit()" type="button">5m</button>
+	<button onClick="sample.value='1h'; this.parentNode.submit()" type="button">1h</button>
+	<button onClick="sample.value='24h'; this.parentNode.submit()" type="button">1d</button>
+	<button onClick="sample.value='168h'; this.parentNode.submit()" type="button">1w</button>
     </form>
     </section>
   </body>
