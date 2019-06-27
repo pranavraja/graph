@@ -20,7 +20,7 @@ type sample struct {
 	Count int64
 }
 
-func resample(times []int64, d time.Duration, cumulative bool) []sample {
+func resample(times []int64, d time.Duration, multiply int64, cumulative bool) []sample {
 	if len(times) == 0 {
 		return nil
 	}
@@ -30,7 +30,7 @@ func resample(times []int64, d time.Duration, cumulative bool) []sample {
 	}
 	for _, t := range times {
 		if next := current.Time + int64(d/time.Millisecond); t < next {
-			current.Count++
+			current.Count += multiply
 			continue
 		}
 		samples = append(samples, current)
@@ -86,8 +86,12 @@ func sortInt64s(ts []int64) {
 }
 
 func main() {
-	var rfc bool
+	var (
+		rfc      bool
+		multiply int64
+	)
 	flag.BoolVar(&rfc, "rfc", false, "Parse dates as RFC3339 first")
+	flag.Int64Var(&multiply, "multiply", 1, "multiple y axis by a certain factor")
 	flag.Parse()
 	filenames := flag.Args()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -112,7 +116,7 @@ func main() {
 					d = 24 * time.Hour
 				}
 			}
-			samples := resample(times, d, cumulative)
+			samples := resample(times, d, multiply, cumulative)
 			var graph struct {
 				Title string
 				Y     string
@@ -149,8 +153,8 @@ func main() {
 				}
 			}
 
-			samples1 := resample(times1, d, cumulative)
-			samples2 := resample(times2, d, cumulative)
+			samples1 := resample(times1, d, multiply, cumulative)
+			samples2 := resample(times2, d, multiply, cumulative)
 			var graph struct {
 				Title   string
 				Y1      string
