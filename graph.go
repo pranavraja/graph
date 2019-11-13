@@ -2,8 +2,12 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"flag"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -42,12 +46,7 @@ func resample(times []int64, d time.Duration, multiply int64, cumulative bool) [
 	return samples
 }
 
-func timestamps(filename string, rfc bool) ([]int64, error) {
-	f, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
+func timestamps(f io.Reader, rfc bool) ([]int64, error) {
 	scanner := bufio.NewScanner(f)
 	i := 0
 	var times []int64
@@ -94,17 +93,27 @@ func main() {
 	flag.Int64Var(&multiply, "multiply", 1, "multiple y axis by a certain factor")
 	flag.Parse()
 	filenames := flag.Args()
+	var data []byte
+	if stdin, err := os.Stdin.Stat(); err == nil && stdin.Mode()&os.ModeCharDevice == 0 {
+		data, err = ioutil.ReadAll(os.Stdin)
+		if err != nil {
+			log.Fatalf("couldn't read stdin: %s", err)
+		}
+	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		d, _ := time.ParseDuration(r.FormValue("sample"))
 		switch len(filenames) {
-		case 1:
-			first := filenames[0]
-			times, err := timestamps(first, rfc)
+		case 0:
+			times, err := timestamps(bytes.NewReader(data), rfc)
 			if err != nil {
 				http.Error(w, err.Error(), 500)
 				return
 			}
 			sortInt64s(times)
+			if len(times) == 0 {
+				http.Error(w, "no data to display", 500)
+				return
+			}
 			cumulative := r.FormValue("cumulative") != ""
 			if d == 0 {
 				distance := time.Duration(times[len(times)-1]-times[0]) * time.Millisecond
@@ -123,24 +132,80 @@ func main() {
 				Data  []sample
 			}
 			graph.Title = r.FormValue("title")
-			graph.Y = strings.TrimSuffix(first, filepath.Ext(first))
+			graph.Y = "count"
+			graph.Data = samples
+			singleTimeSeries.Execute(w, graph)
+		case 1:
+			first, err := os.Open(filenames[0])
+			if err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+			times, err := timestamps(first, rfc)
+			first.Close()
+			if err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+			sortInt64s(times)
+			if len(times) == 0 {
+				http.Error(w, "no data to display", 500)
+				return
+			}
+			cumulative := r.FormValue("cumulative") != ""
+			if d == 0 {
+				distance := time.Duration(times[len(times)-1]-times[0]) * time.Millisecond
+				if distance < time.Hour {
+					d = time.Second
+				} else if distance < 168*time.Hour {
+					d = 5 * time.Minute
+				} else {
+					d = 24 * time.Hour
+				}
+			}
+			samples := resample(times, d, multiply, cumulative)
+			var graph struct {
+				Title string
+				Y     string
+				Data  []sample
+			}
+			graph.Title = r.FormValue("title")
+			graph.Y = strings.TrimSuffix(filenames[0], filepath.Ext(filenames[0]))
 			graph.Data = samples
 			singleTimeSeries.Execute(w, graph)
 		case 2:
-			first := filenames[0]
-			second := filenames[1]
+			first, err := os.Open(filenames[0])
+			if err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
 			times1, err := timestamps(first, rfc)
+			first.Close()
 			if err != nil {
 				http.Error(w, err.Error(), 500)
 				return
 			}
 			sortInt64s(times1)
+			if len(times1) == 0 {
+				http.Error(w, "no data to display", 500)
+				return
+			}
+			second, err := os.Open(filenames[1])
+			if err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
 			times2, err := timestamps(second, rfc)
+			second.Close()
 			if err != nil {
 				http.Error(w, err.Error(), 500)
 				return
 			}
 			sortInt64s(times2)
+			if len(times2) == 0 {
+				http.Error(w, "no data to display", 500)
+				return
+			}
 			cumulative := r.FormValue("cumulative") != ""
 			if d == 0 {
 				distance := time.Duration(times1[len(times1)-1]-times1[0]) * time.Millisecond
@@ -168,8 +233,8 @@ func main() {
 				graph.TwoAxes = true
 			}
 			graph.Title = r.FormValue("title")
-			graph.Y1 = strings.TrimSuffix(first, filepath.Ext(first))
-			graph.Y2 = strings.TrimSuffix(second, filepath.Ext(second))
+			graph.Y1 = strings.TrimSuffix(filenames[0], filepath.Ext(filenames[0]))
+			graph.Y2 = strings.TrimSuffix(filenames[1], filepath.Ext(filenames[1]))
 			graph.Data1 = samples1
 			graph.Data2 = samples2
 			doubleTimeSeries.Execute(w, graph)
