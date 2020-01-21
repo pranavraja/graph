@@ -48,7 +48,7 @@ var doubleTimeSeries = template.Must(template.New("").Parse(`<!DOCTYPE html>
 	  interpolateNulls: true
         };
 
-        var chart = new google.visualization.AreaChart(document.getElementById('chart_div'));
+        var chart = new google.visualization.ColumnChart(document.getElementById('chart_div'));
         chart.draw(dataTable, options);
       }
     </script>

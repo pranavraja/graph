@@ -31,7 +31,7 @@ var singleTimeSeries = template.Must(template.New("").Parse(`<!DOCTYPE html>
           },
         };
 
-        var chart = new google.visualization.AreaChart(document.getElementById('chart_div'));
+        var chart = new google.visualization.ColumnChart(document.getElementById('chart_div'));
         chart.draw(data, options);
       }
     </script>
